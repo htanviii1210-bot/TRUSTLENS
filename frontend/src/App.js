@@ -1,3 +1,4 @@
+// frontend/src/App.js
 import React, { useState } from 'react';
 import axios from 'axios';
 import Uploader from './components/Uploader';
@@ -5,14 +6,22 @@ import Results from './components/Results';
 
 const API = process.env.REACT_APP_API || 'http://localhost:8000';
 
+// Client-side validation mirrors the backend, for instant feedback
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
+const MAX_BYTES = 15 * 1024 * 1024;
+
 function Logo() {
   return (
     <div className="logo">
       <svg viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"
-              stroke="white" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"
+          stroke="white" strokeWidth="2" strokeLinejoin="round"
+        />
+        <path
+          d="M9 12l2 2 4-4" stroke="white" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+        />
       </svg>
     </div>
   );
@@ -26,14 +35,24 @@ export default function App() {
   const [error, setError] = useState(null);
 
   const handleFile = (f) => {
-    setFile(f);
-    setResult(null);
     setError(null);
+    setResult(null);
+
+    if (!ALLOWED_TYPES.includes(f.type)) {
+      setError('Unsupported file type. Please upload a JPG or PNG image.');
+      return;
+    }
+    if (f.size > MAX_BYTES) {
+      setError('File is too large. Maximum allowed size is 15 MB.');
+      return;
+    }
+
+    setFile(f);
     setPreview(URL.createObjectURL(f));
   };
 
   const analyze = async () => {
-    if (!file) return;
+    if (!file || loading) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -48,14 +67,19 @@ export default function App() {
       });
       setResult(res.data);
     } catch (e) {
-      const detail = e?.response?.data?.detail || e.message;
-      setError(`Analysis failed: ${detail}`);
+      const detail = e?.response?.data?.detail;
+      const msg =
+        (detail && (detail.message || detail)) ||
+        e.message ||
+        'Analysis failed.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   const reset = () => {
+    if (preview) URL.revokeObjectURL(preview);
     setFile(null);
     setPreview(null);
     setResult(null);
@@ -69,21 +93,24 @@ export default function App() {
           <Logo />
           TrustLens
         </div>
-        <div className="nav-tag">v1.0 · Prototype</div>
+        <div className="nav-tag">v2.0 · Rule-based Analysis</div>
       </div>
 
       <div className="hero">
         <h1>Detect filters. Reveal authenticity.</h1>
         <p>
-          Upload any image and TrustLens will analyze forensic indicators,
-          filter signatures, and metadata to compute a transparent trust score.
+          Upload an image and TrustLens will analyse its noise, colour,
+          texture, edges, and metadata to produce an explainable Trust Score.
         </p>
         <div className="badge-row">
-          <span className="badge">Noise Analysis</span>
-          <span className="badge">Color Forensics</span>
+          <span className="badge">Noise</span>
+          <span className="badge">Saturation</span>
+          <span className="badge">Contrast</span>
+          <span className="badge">Colour Balance</span>
+          <span className="badge">Sharpness</span>
+          <span className="badge">Texture</span>
+          <span className="badge">Edge Density</span>
           <span className="badge">Skin Smoothing</span>
-          <span className="badge">EXIF Inspection</span>
-          <span className="badge">Explainable AI</span>
         </div>
       </div>
 
@@ -98,12 +125,26 @@ export default function App() {
             />
 
             {preview && !loading && (
-              <div style={{ marginTop: 24 }}>
-                <img src={preview} alt="preview" className="preview-img" />
+              <div className="preview-single">
+                <img src={preview} alt="upload preview" className="preview-img" />
+                <div className="file-chip">
+                  <strong>{file?.name}</strong>
+                  <span> · {(file.size / 1024).toFixed(0)} KB</span>
+                </div>
                 <div className="row">
                   <button className="btn btn-ghost" onClick={reset}>
-                    Clear
+                    Remove image
                   </button>
+                  <button className="btn btn-ghost" onClick={() => document.getElementById('tl-replace')?.click()}>
+                    Replace image
+                  </button>
+                  <input
+                    id="tl-replace"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    style={{ display: 'none' }}
+                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  />
                 </div>
               </div>
             )}
@@ -126,7 +167,7 @@ export default function App() {
             <Results data={result} previewUrl={preview} />
             <div className="row" style={{ marginTop: 32 }}>
               <button className="btn btn-ghost" onClick={reset}>
-                ← Analyze another image
+                ← Analyse another image
               </button>
             </div>
           </>
@@ -134,8 +175,9 @@ export default function App() {
       </div>
 
       <div className="footer">
-        TrustLens is a prototype. Scores are heuristic and should not be used
-        as sole evidence for forensic decisions.
+        TrustLens provides an estimated analysis based on selected image
+        characteristics. Its results do not guarantee whether an image is
+        original or edited.
       </div>
     </div>
   );
